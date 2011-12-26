@@ -1,0 +1,7 @@
+/* For some reason, IE makes a one pixel gap on the bottom and right */
+img.tr
+	{right:-1px;}
+img.bl
+	{bottom:-1px;}
+img.br
+	{bottom:-1px; right:-1px;}
