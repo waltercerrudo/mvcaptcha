@@ -1,9 +1,3 @@
-==[ Foreword ]==
-This version is completely redesigned with a fancy new look of CAPTCHA.
-In order to simplify the the usage, I also redisgned the interface.
-
-The newest Version can be found at [1].
-
 ==[ Requirements ]==
 - PHP >= 4.0.1
 - TTF support
@@ -18,23 +12,18 @@ It's realy easy to use this class.
 
 Example:
 
-Generation a CAPTCHA:
+Creation a CAPTCHA:
+  $mvcaptcha = new mvcaptcha('aceptar');
 
-  $mvcaptcha = new mvcaptcha();
-
-To check if the button Aceptar was pressed using  
+To check if the button Aceptar was pressed using 
   $captcha->verformulario()
   
-To create the mvCaptcha use  
-  $captcha->crearmvcaptcha('./ok.php','./error.php');
+To show the captcha use
+  echo $captcha->vermvcaptcha('./ok.php','./error.php');
   The first parameter is the URL to which to turn when the answer is correct
   The second parameter is the URL to which to turn when the answer is wrong
-	
-To show the captcha use
-  echo $captcha->getHTML();
 
-
-To verify the data using
+To verify the data use
 	$captcha->proceder();
 
 That's it :)
@@ -43,6 +32,6 @@ That's it :)
 ==[ Author ]==
 Walter Cerrudo
 waltercerrudo@gmail.com
-http:/walterio.netau.net/
+http://www.lawebdwwalterio.com.ar/
 
 

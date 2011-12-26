@@ -12,12 +12,11 @@
 </head>
 <body>
 <?php 	
-		session_start();
-		$_SESSION['HOTLINK']='SI';
-		?>
-	
+	session_start();	
+	$_SESSION['HOTLINK']='SI';
+	?>	
 			<div class="subheader">
-				<h2>Validaci&oacute;n exitosa</h2>
+				<h2>Validaci&oacute;n err&oacute;nea</h2>
 				<p>Redireccionando en 5 segundos</p>
 			</div>
 

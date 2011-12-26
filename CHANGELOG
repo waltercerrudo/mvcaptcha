@@ -1,13 +1,10 @@
-==[ Version 2.0.1 ]==
-30.11.2006
+==[ Version 0.9.1 ]==
+26.11.2011
+- detencion del movimiento del captcha
+- restriccion de acceso a la imagen (acceso a la imagen via url denegado)
+- nuevas caracteristicas de seguridad (tamaño aleatorio, ubicacion aletaria, etc)
 
-- solved a bug that caused that the class to couldn't find the fonts with some PHP configs (Thanks to Olli)
 
-
-==[ Version 2.0 ]==
-15.01.2006
-
-- changed the look of the captcha
-- improved security of the captcha (Thanks to Fabrizio Calderan)
-- changed the interface
-- bugfixes
+==[ Version 0.9 ]==
+26.10.2010
+- first version

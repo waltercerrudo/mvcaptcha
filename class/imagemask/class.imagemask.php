@@ -60,6 +60,7 @@
 //
 
 
+
 define('mdTOPLEFT',     0);
 define('mdTOP',         1);
 define('mdTOPRIGHT',    2);
@@ -98,7 +99,13 @@ class imageMask
         $this->_bgc     = $this->_htmlHexToBinArray($bg);
     }
     
-    
+	/**
+    * @return boolean
+    * @desc Comprueba si se ingresaron datos
+    */	
+    function crop(){
+
+	}
     /**
     * @return void
     * @param bool $do
@@ -190,7 +197,7 @@ class imageMask
         }
         else if ($type == 'png')
         {
-            header('Content-type: image/png');
+        	header('Content-type: image/png');
             echo @imagepng($this->_img['final']);
             return true;
         }
@@ -204,6 +211,7 @@ class imageMask
         {
             $this->_debug('showImage', "Could not show the output file as a $type.");
         }
+
         return false;
     }
     
@@ -237,7 +245,7 @@ class imageMask
                         $sx = imagesx($this->_img['final']);
                         $sy = imagesy($this->_img['final']);
                         
-                        set_time_limit(120);
+                        //set_time_limit(120);
                         for ($x = 0; $x < $sx; $x++)
                         {
                             for ($y = 0; $y < $sy; $y++)
@@ -305,10 +313,13 @@ class imageMask
             $isx = imagesx($this->_img['orig']);
             $isy = imagesy($this->_img['orig']);
             $this->_img['final'] = imagecreatetruecolor($isx, $isy);
+            $bg_color = hexdec('ffffff');
+			imagecolortransparent($this->_img['final'], $bg_color);
+            imagefill($this->_img['final'], 0, 0, $color);
             if ($this->_img['final'])
             {
                 imagealphablending($this->_img['final'], true);
-                imagecopyresampled($this->_img['final'], $this->_img['orig'], 0, 0, 0, 0, $isx, $isy, $isx, $isy);
+                imagecopy($this->_img['final'], $this->_img['orig'], 0, 0, 0, 0, $isx, $isy);
                 return true;
             }
             else
@@ -343,6 +354,7 @@ class imageMask
         
         if ($this->_mask['gray'])
         {
+          
             switch($this->_maskDynamic)
             {
                 case mdTOPLEFT:
@@ -398,6 +410,8 @@ class imageMask
             }
             else
             {
+            	$sx = 0;
+                $sy = 0;
                 imagecopymergegray($this->_mask['gray'], $this->_mask['orig'], $sx, $sy, 0, 0, $msx, $msy, 100);
             }
             return true;

@@ -1,0 +1,5 @@
+* Detener movimiento con un click - hecho 12/12/2011
+* Mejorar seguridad de las imágenes (Aleatorizar tamaño, fuente, etc) - hecho 26/12/2011
+----------------------------------------------------------------------------------------
+* Agregar array con parámetros
+* Validar via AJAX
