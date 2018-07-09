@@ -89,9 +89,9 @@ class imageMask
     * @param string $bg
     * @desc Class constructor.  Pass the background colour as an HTML colour string.
     */
-    function imageMask($bg = 'FFFFFF')
+    function  __construct($bg = 'FFFFFF')
     {
-        $this->setDebugging(false);
+        $this->setDebugging(true);
         $this->maskOption(mdCENTER);
         $this->_colours = array();
         $this->_img     = array();
@@ -111,7 +111,7 @@ class imageMask
     * @param bool $do
     * @desc Toggles debugging
     */
-    function setDebugging($do = false)
+    function setDebugging($do = true)
     {
         $this->_showDebug = ($do === true) ? true : false;
     }
@@ -198,13 +198,13 @@ class imageMask
         else if ($type == 'png')
         {
         	header('Content-type: image/png');
-            echo @imagepng($this->_img['final']);
+            echo imagepng($this->_img['final']);
             return true;
         }
         else if ($type == 'jpg' || $type == 'jpeg')
         {
-            header('Content-type: image/jpeg');
-            echo @imagejpeg($this->_img['final'], '', $quality);
+            //header('Content-type: image/jpeg');
+            echo 'jpg';//imagejpeg($this->_img['final'], '', $quality);
             return true;
         }
         else
@@ -313,7 +313,8 @@ class imageMask
             $isx = imagesx($this->_img['orig']);
             $isy = imagesy($this->_img['orig']);
             $this->_img['final'] = imagecreatetruecolor($isx, $isy);
-            $bg_color = hexdec('ffffff');
+            $bg_color = hexdec('000000');
+            $color = hexdec('ffffff');
 			imagecolortransparent($this->_img['final'], $bg_color);
             imagefill($this->_img['final'], 0, 0, $color);
             if ($this->_img['final'])

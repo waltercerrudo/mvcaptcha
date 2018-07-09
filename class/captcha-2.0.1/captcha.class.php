@@ -34,14 +34,16 @@ class captcha
 	var $FileName;
 	var $fontpath;
 	var $fonts;
-	function captcha ($length = 4)			//CHANGED BY WALTER CERRUDO 9/11/2010
+	function __construct ($length = 4)			//CHANGED BY WALTER CERRUDO 9/11/2010
 	{
+				
 		//header('Content-type: image/png'); CHANGED BY WALTER CERRUDO 9/11/2010
 		$this->Length   = $length;
-		//$this->fontpath = dirname($_SERVER['SCRIPT_FILENAME']) . './fonts/';
-		$this->fontpath = './fonts/';
+		$this->fontpath = dirname($_SERVER['SCRIPT_FILENAME']) . '/fonts/';
+		//$this->fontpath = './fonts/';
 		$this->fonts    = $this->getFonts();
-		$errormgr       = new error;
+		$this->FileName = $this->makeFileName();
+		$errormgr       = new myerror;
 		if ($this->fonts == FALSE)
 		{
 			//$errormgr = new error;
@@ -90,7 +92,8 @@ class captcha
 
 	function getRandFont ()
 	{
-		return $this->fontpath . $this->fonts[rand(0,count($this->fonts) - 1)];
+		$font = $this->fontpath . $this->fonts[rand(0,count($this->fonts) - 1)];
+		return $font;
 	} //getRandFont
 
 	function stringGen ()
@@ -135,7 +138,11 @@ class captcha
 		}
 		imagecolortransparent($image,hexdec('FFFFFF'));					//ADDED BY WALTER CERRUDO 9/11/2010
 		$this->makeFileName();
-		imagepng($image,'./tmp/'.$this->FileName.'.png');							//COMMENT BY WALTER CERRUDO 9/11/2010
+		$s = sys_get_temp_dir() . DIRECTORY_SEPARATOR  . $this->FileName.'.png';
+		
+		if(!imagepng($image,$s)){
+			die('error guardando la imagen');
+		}					//COMMENT BY WALTER CERRUDO 9/11/2010		
 		imagedestroy($image);
 	} //MakeCaptcha
 

@@ -26,12 +26,12 @@
 
   ******************************************************************/
   
-  class error
+  class myerror
   {
   	
   	var $errors;
   	
-  	function error ()
+  	function  __construct ()
   	{
   	
   	  $this->errors = array();

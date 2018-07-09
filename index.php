@@ -23,17 +23,10 @@
 * @since      File available since Release 1.0
 */
 
-	session_start();											//INICIAR SESION
-	$_SESSION['HOTLINK']='NO';									//INICIALIZAR VARIABLE PARA EVITAR HOTLINK
-	require('./class/mvcaptcha/mvcaptcha.class.php');			//INCLUIR ARCHIVO CON LA DEFINICIÓN DE LA CLASE MVCAPTCHA
-	$captcha = new mvcaptcha('nada');							//INSTANCIAR MVCAPTCHA
-	if ($captcha->verformulario())								//EVALUAR SI MUESTRO FORMULARIO 
-	{
-		echo $captcha->vermvcaptcha('./ok.php','./error.php');	//MUESTRO EL MVCAPTCHA
-	}
-	else
-	{
-		$captcha->proceder();									//EVALUAR EL MVCAPTCHA Y CONTINUAR SEGUN CORRESPONDA
-	}
- 
-?>
+	session_start();												//INICIAR SESION
+	$_SESSION['HOTLINK']='NO';										//INICIALIZAR VARIABLE PARA EVITAR HOTLINK
+	require('./class/mvcaptcha/mvcaptcha.class.php');				//INCLUIR ARCHIVO CON LA DEFINICIÃ“N DE LA CLASE MVCAPTCHA
+	$mvcaptcha = new mvcaptcha('nada','./ok.php','./error.php');	//INSTANCIAR MVCAPTCHA
+	
+
+	$mvcaptcha->run();

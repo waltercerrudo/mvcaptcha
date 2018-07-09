@@ -1,13 +1,12 @@
 <?php
 	//include '/class/image/image.class.php';	
 	session_start();
-	if ($_SERVER['HTTP_REFERER']<>'')
-	{
+	
 	require './class/imagemask/class.imagemask.php';	
 	$im = new imageMask('FFFFFF');
-    $im->setDebugging(false);
+    $im->setDebugging(true);
     $im->maskOption('centre');
-    if ($im->loadImage("./tmp/".$_SESSION['FILENAME'].'.png'))
+    if ($im->loadImage(sys_get_temp_dir() . DIRECTORY_SEPARATOR .$_SESSION['FILENAME'].'.png'))
     {
         if ($im->applyMask("./img/mask/mask".$_GET['s'].$_GET['l'].".png"))
         {
@@ -25,17 +24,14 @@
 	       	$bg_color = hexdec('ffffff');
 			imagecolortransparent($im->_img['final'], $bg_color);
 			$im->showImage('png',3);
-			//$im->saveImage('./tmp/'.$_SESSION['FILENAME'].$_GET['l'].'.png');
+			//$im->saveImage(sys_get_temp_dir() . DIRECTORY_SEPARATOR .$_SESSION['FILENAME'].$_GET['l'].'.png');
 			if ($_GET['l']=='b')
 			{
-				unlink('./tmp/'.$_SESSION['FILENAME'].'.png');
+				//unlink(sys_get_temp_dir() . DIRECTORY_SEPARATOR .$_SESSION['FILENAME'].'.png');
 			}
-        }	        
-    }
-	}
-	else
-	{
-		echo 'NOT HOTLINK';
-	}
-	
-?>
+		}	 else {
+			die("error aplicando mascara");
+		}	
+	}	else {
+		die("error cargando imagen");
+	}	
