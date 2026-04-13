@@ -1,0 +1,19 @@
+==[ Version 0.10.1 ]==
+13.04.2026
+- simplificacion del codigo
+- mejora de UI
+- mejoras en las mascaras
+- nuevo parallax
+- fix validacion captcha
+
+
+==[ Version 0.9.1 ]==
+26.11.2011
+- detencion del movimiento del captcha
+- restriccion de acceso a la imagen (acceso a la imagen via url denegado)
+- nuevas caracteristicas de seguridad (tamaño aleatorio, ubicacion aleatoria, etc)
+
+
+==[ Version 0.9 ]==
+26.10.2010
+- first version
