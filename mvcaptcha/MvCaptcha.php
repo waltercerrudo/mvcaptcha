@@ -234,18 +234,33 @@ class MvCaptcha
             <meta charset="utf-8">
             <meta name="viewport" content="width=device-width, initial-scale=1">
             <title>mvCaptcha</title>
+            <style>
+                *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+                html { height: 100%; }
+                body {
+                    min-height: 100%;
+                    background: #080810;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    padding: 2rem;
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+                }
+                body::before {
+                    content: '';
+                    position: fixed;
+                    inset: 0;
+                    background: radial-gradient(ellipse 90% 55% at 50% -5%,
+                        rgba(108,99,255,.18) 0%, transparent 65%);
+                    pointer-events: none;
+                }
+                form { display: contents; }
+            </style>
         </head>
         <body>
-        <main style="font-family:system-ui,sans-serif;text-align:center;padding:2rem;">
             <form method="post">
                 {$widget}
-                <p><button type="submit"
-                    style="margin-top:.8rem;padding:7px 20px;font-size:.9rem;
-                           background:#3354aa;color:#fff;border:none;border-radius:4px;cursor:pointer;">
-                    Verificar
-                </button></p>
             </form>
-        </main>
         </body>
         </html>
         HTML;
