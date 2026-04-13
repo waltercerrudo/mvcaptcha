@@ -98,7 +98,7 @@ class MvCaptcha
         $this->cleanup();
         $_SESSION[self::SK_STRING] = $this->generateString();
         $_SESSION[self::SK_FILE]   = bin2hex(random_bytes(8));
-        $_SESSION[self::SK_MASK]   = random_int(1, 5);
+        $_SESSION[self::SK_MASK]   = random_int(1, 3);
         $this->renderPng();
     }
 
@@ -260,6 +260,12 @@ class MvCaptcha
         $backImg = $this->backToDataUri($back);
         $reloadUrl = htmlspecialchars($_SERVER['REQUEST_URI'] ?? './', ENT_QUOTES);
 
+        // Punto de solución aleatorio: posición normalizada del mouse (-1..1)
+        // donde las dos mitades quedan alineadas. Evita que el captcha
+        // aparezca resuelto en reposo (mouse al centro = nx=0, ny=0).
+        $solveX = random_int(-40, 40) / 100.0;   // -0.40 … 0.40
+        $solveY = random_int(-25, 25) / 100.0;   // -0.25 … 0.25
+
         $css = $this->inlineCSS();
         $js  = $this->inlineJS();
 
@@ -269,11 +275,13 @@ class MvCaptcha
         <div class="_mvc-widget">
             <p class="_mvc-hint">
                 Mueve el mouse para ensamblar el texto.<br>
-                Clic para detener &mdash;
+                Clic para fijar &mdash;
                 <a href="{$reloadUrl}">&#x21BA; nueva imagen</a>
             </p>
 
             <div id="_mvc-scene" class="_mvc-scene"
+                 data-solve-x="{$solveX}"
+                 data-solve-y="{$solveY}"
                  style="background-image:url({$backImg})">
                 <div data-depth-x="0.8" data-depth-y="-0.4">
                     <img src="{$imgA}" alt="" width="300" height="75">
@@ -359,10 +367,35 @@ class MvCaptcha
         return <<<'JS'
         (function(global){
             'use strict';
-            var SX = 45, SY = 20, EASE = 0.12;
+
+            // Fuerza máxima de desplazamiento en px para cada eje
+            var SX = 48, SY = 22;
+            // Factor de suavizado (easing hacia el target cada frame)
+            var EASE = 0.10;
+
+            /**
+             * Curva de respuesta no-lineal: |Δ|^1.5 * signo(Δ)
+             *
+             * Efecto: movimientos pequeños cerca del punto de solución
+             * producen desplazamientos muy finos (control preciso);
+             * movimientos amplios generan barrido rápido.
+             *
+             *   Δ=0.05 → 0.011   (muy suave cerca del centro)
+             *   Δ=0.30 → 0.164
+             *   Δ=0.70 → 0.586
+             *   Δ=1.00 → 1.000
+             */
+            function curve(v) {
+                return Math.sign(v) * Math.pow(Math.abs(v), 1.5);
+            }
 
             function MvParallax(scene) {
+                this._scene   = scene;
                 this._layers  = Array.from(scene.querySelectorAll('[data-depth-x],[data-depth-y]'));
+                // Punto de solución embebido por PHP (posición normalizada del mouse
+                // en la que ambas mitades quedan alineadas)
+                this._solveX  = parseFloat(scene.dataset.solveX || 0);
+                this._solveY  = parseFloat(scene.dataset.solveY || 0);
                 this._active  = true;
                 this._cur     = this._layers.map(function(){ return {x:0,y:0}; });
                 this._tgt     = this._layers.map(function(){ return {x:0,y:0}; });
@@ -375,14 +408,18 @@ class MvCaptcha
 
             MvParallax.prototype._onMove = function(e) {
                 if (!this._active) return;
+                // Posición normalizada: -1 (izq/arriba) … +1 (der/abajo)
                 var nx = (e.clientX / window.innerWidth)  * 2 - 1;
                 var ny = (e.clientY / window.innerHeight) * 2 - 1;
+                // Desplazamiento relativo al punto de solución
+                var rx = curve(nx - this._solveX);
+                var ry = curve(ny - this._solveY);
                 var self = this;
                 this._layers.forEach(function(layer, i) {
                     var dx = parseFloat(layer.dataset.depthX || 0);
                     var dy = parseFloat(layer.dataset.depthY || 0);
-                    self._tgt[i].x = nx * dx * SX;
-                    self._tgt[i].y = ny * dy * SY;
+                    self._tgt[i].x = rx * dx * SX;
+                    self._tgt[i].y = ry * dy * SY;
                 });
             };
 
@@ -397,16 +434,32 @@ class MvCaptcha
                 this._raf = requestAnimationFrame(this._tick);
             };
 
+            /**
+             * Congela las imágenes en su posición actual.
+             * No snapea a cero — el usuario puede leer el texto donde quedó.
+             */
             MvParallax.prototype.disable = function() {
                 this._active = false;
-                this._tgt.forEach(function(t){ t.x = 0; t.y = 0; });
-            };
-
-            MvParallax.prototype.enable = function() { this._active = true; };
-
-            MvParallax.prototype.destroy = function() {
                 window.removeEventListener('mousemove', this._onMove);
                 cancelAnimationFrame(this._raf);
+                this._raf = null;
+                // Fija el transform exactamente donde estaba (sin más easing)
+                var self = this;
+                this._layers.forEach(function(layer, i) {
+                    var c = self._cur[i];
+                    layer.style.transform = 'translate('+c.x.toFixed(2)+'px,'+c.y.toFixed(2)+'px)';
+                });
+            };
+
+            MvParallax.prototype.enable = function() {
+                if (this._active) return;
+                this._active = true;
+                window.addEventListener('mousemove', this._onMove);
+                this._raf = requestAnimationFrame(this._tick);
+            };
+
+            MvParallax.prototype.destroy = function() {
+                this.disable();
             };
 
             global._MvParallax = MvParallax;
