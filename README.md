@@ -1,3 +1,5 @@
+![Claude 3.5](https://img.shields.io/badge/Model-Claude%203.5%20Sonnet-D97757?style=for-the-badge&logo=anthropic)
+
 # mvCaptcha
 
 **Versión 0.10.1** — Actualización y modernización asistida por [Claude Code](https://claude.ai/code) (Anthropic).
