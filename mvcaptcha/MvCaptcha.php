@@ -83,7 +83,7 @@ class MvCaptcha
     public function validate(): bool
     {
         $this->sessionStart();
-        $input   = $_POST['_mvc_captcha'] ?? '';
+        $input   = strtoupper($_POST['_mvc_captcha'] ?? '');
         $correct = $_SESSION[self::SK_STRING] ?? '';
         $this->cleanup();
         return $input === $correct && $correct !== '';
@@ -93,8 +93,15 @@ class MvCaptcha
     // Generación de captcha
     // ══════════════════════════════════════════════════════════════════════════
 
-    private function generate(): void
+    private function generate(bool $force = false): void
     {
+        // Si ya hay un captcha válido en sesión y no se fuerza regeneración,
+        // reutilizarlo. Esto evita que requests secundarias del navegador
+        // (favicon, prefetch, etc.) sobreescriban la sesión con un string
+        // distinto al que se mostró en la imagen.
+        if (!$force && !empty($_SESSION[self::SK_STRING]) && !empty($_SESSION[self::SK_FILE])) {
+            return;
+        }
         $this->cleanup();
         $_SESSION[self::SK_STRING] = $this->generateString();
         $_SESSION[self::SK_FILE]   = bin2hex(random_bytes(8));
@@ -104,7 +111,10 @@ class MvCaptcha
 
     private function generateString(): string
     {
-        $pool = array_merge(range('A', 'Z'), range('a', 'z'));
+        // Solo mayúsculas: las fuentes decorativas del pool frecuentemente
+        // no tienen glifos minúsculos y renderizan 'a' como 'A', provocando
+        // que la comparación case-sensitive siempre falle.
+        $pool = range('A', 'Z');
         $out  = '';
         for ($i = 0; $i < $this->length; $i++) {
             $out .= $pool[random_int(0, count($pool) - 1)];
@@ -224,7 +234,7 @@ class MvCaptcha
 
     private function buildPage(): string
     {
-        $this->generate();
+        $this->generate(force: isset($_GET['_mvc_new']));
         $widget = $this->buildWidget();
 
         return <<<HTML
@@ -241,6 +251,7 @@ class MvCaptcha
                     min-height: 100%;
                     background: #080810;
                     display: flex;
+                    flex-direction: column;
                     align-items: center;
                     justify-content: center;
                     padding: 2rem;
@@ -250,16 +261,50 @@ class MvCaptcha
                     content: '';
                     position: fixed;
                     inset: 0;
-                    background: radial-gradient(ellipse 90% 55% at 50% -5%,
-                        rgba(108,99,255,.18) 0%, transparent 65%);
+                    background:
+                        radial-gradient(ellipse 80% 50% at 50% -10%, rgba(108,99,255,.22) 0%, transparent 65%),
+                        radial-gradient(ellipse 40% 30% at 80% 90%, rgba(60,180,255,.06) 0%, transparent 60%);
                     pointer-events: none;
                 }
-                form { display: contents; }
+                form {
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    gap: 1rem;
+                }
+                ._mvc-submit {
+                    padding: 10px 28px;
+                    font-size: .9rem;
+                    font-family: inherit;
+                    font-weight: 600;
+                    letter-spacing: .04em;
+                    color: #fff;
+                    background: linear-gradient(135deg, #6c63ff 0%, #4a90e2 100%);
+                    border: none;
+                    border-radius: 10px;
+                    cursor: pointer;
+                    box-shadow: 0 4px 18px rgba(108,99,255,.35);
+                    transition: transform .15s, box-shadow .15s, filter .15s;
+                }
+                ._mvc-submit:hover {
+                    filter: brightness(1.12);
+                    box-shadow: 0 6px 24px rgba(108,99,255,.5);
+                    transform: translateY(-1px);
+                }
+                ._mvc-submit:active { transform: translateY(0); filter: brightness(.95); }
+                ._mvc-brand {
+                    margin-top: .4rem;
+                    font-size: 11px;
+                    color: rgba(255,255,255,.2);
+                    letter-spacing: .06em;
+                }
             </style>
         </head>
         <body>
             <form method="post">
                 {$widget}
+                <button type="submit" class="_mvc-submit">Verificar</button>
+                <span class="_mvc-brand">mvCaptcha</span>
             </form>
         </body>
         </html>
@@ -273,7 +318,8 @@ class MvCaptcha
         $imgB    = $this->buildDataUri('b');
         $back    = random_int(1, 6);
         $backImg = $this->backToDataUri($back);
-        $reloadUrl = htmlspecialchars($_SERVER['REQUEST_URI'] ?? './', ENT_QUOTES);
+        $base      = strtok($_SERVER['REQUEST_URI'] ?? './', '?');
+        $reloadUrl = htmlspecialchars($base . '?_mvc_new=1', ENT_QUOTES);
 
         // Punto de solución aleatorio: posición normalizada del mouse (-1..1)
         // donde las dos mitades quedan alineadas. Evita que el captcha
@@ -307,12 +353,14 @@ class MvCaptcha
             </div>
 
             <label class="_mvc-label" for="_mvc-input">
-                Texto (sensible a may&uacute;sculas):
+                Ingres&aacute; el texto en may&uacute;sculas:
             </label>
             <input id="_mvc-input" class="_mvc-input"
                    type="text" name="_mvc_captcha"
                    maxlength="20" spellcheck="false"
-                   autocomplete="off" required>
+                   autocomplete="off" autocapitalize="characters"
+                   style="text-transform:uppercase"
+                   required>
         </div>
 
         <script>{$js}</script>
@@ -336,23 +384,41 @@ class MvCaptcha
     {
         return <<<'CSS'
         ._mvc-widget {
-            display: inline-block;
+            display: inline-flex;
+            flex-direction: column;
+            align-items: center;
+            gap: .9rem;
             font-family: system-ui, "Segoe UI", sans-serif;
-            font-size: 14px;
-            color: #444;
+            font-size: 13px;
+            color: rgba(255,255,255,.75);
             text-align: center;
+            background: rgba(255,255,255,.04);
+            border: 1px solid rgba(255,255,255,.09);
+            border-radius: 20px;
+            padding: 1.6rem 2rem 1.8rem;
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            box-shadow: 0 8px 40px rgba(0,0,0,.45), 0 0 0 1px rgba(108,99,255,.12);
         }
-        ._mvc-hint { margin: 0 0 .6rem; line-height: 1.5; }
-        ._mvc-hint a { color: #3354aa; }
+        ._mvc-hint { margin: 0; line-height: 1.6; }
+        ._mvc-hint a {
+            color: #9d97ff;
+            text-decoration: none;
+            border-bottom: 1px solid rgba(157,151,255,.35);
+            transition: color .15s, border-color .15s;
+        }
+        ._mvc-hint a:hover { color: #c5c2ff; border-color: rgba(197,194,255,.5); }
         ._mvc-scene {
             position: relative;
             width: 300px;
             height: 75px;
-            margin: 0 auto .8rem;
             overflow: hidden;
             background-size: cover;
             background-position: center;
             cursor: crosshair;
+            border-radius: 10px;
+            border: 1px solid rgba(255,255,255,.1);
+            box-shadow: 0 4px 24px rgba(0,0,0,.4), 0 0 0 1px rgba(108,99,255,.15);
         }
         ._mvc-scene > div {
             position: absolute;
@@ -360,19 +426,32 @@ class MvCaptcha
             will-change: transform;
         }
         ._mvc-scene img { display: block; }
-        ._mvc-label { display: block; margin-bottom: .3rem; }
+        ._mvc-label {
+            display: block;
+            font-size: 11px;
+            letter-spacing: .07em;
+            text-transform: uppercase;
+            color: rgba(255,255,255,.4);
+        }
         ._mvc-input {
-            padding: 6px 10px;
-            font-size: 1rem;
-            border: 1px solid #bbb;
-            border-radius: 4px;
+            padding: 9px 14px;
+            font-size: .95rem;
+            font-family: inherit;
+            background: rgba(255,255,255,.06);
+            border: 1px solid rgba(255,255,255,.14);
+            border-radius: 8px;
+            color: #fff;
             width: 160px;
             text-align: center;
-            letter-spacing: .1em;
+            letter-spacing: .14em;
+            transition: border-color .2s, box-shadow .2s;
+            caret-color: #9d97ff;
         }
+        ._mvc-input::placeholder { color: rgba(255,255,255,.25); }
         ._mvc-input:focus {
-            outline: 2px solid #4a90e2;
-            border-color: #4a90e2;
+            outline: none;
+            border-color: rgba(157,151,255,.6);
+            box-shadow: 0 0 0 3px rgba(108,99,255,.25);
         }
         CSS;
     }
