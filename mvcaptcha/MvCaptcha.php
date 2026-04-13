@@ -14,9 +14,18 @@
 class MvCaptcha
 {
     // ── Claves de sesión ──────────────────────────────────────────────────────
-    private const SK_STRING = '_mvc_string';
-    private const SK_FILE   = '_mvc_file';
-    private const SK_MASK   = '_mvc_mask';
+    private const SK_STRING   = '_mvc_string';
+    private const SK_FILE     = '_mvc_file';
+    private const SK_MASK     = '_mvc_mask';
+    private const SK_CSRF     = '_mvc_csrf';
+    private const SK_CREATED  = '_mvc_created';
+    private const SK_ATTEMPTS = '_mvc_attempts';
+    private const SK_LOCKOUT  = '_mvc_lockout';
+
+    // ── Parámetros de seguridad ───────────────────────────────────────────────
+    private const CAPTCHA_TTL      = 600;  // segundos antes de que el captcha expire (10 min)
+    private const MAX_ATTEMPTS     = 5;    // intentos fallidos antes de lockout
+    private const LOCKOUT_DURATION = 300;  // duración del lockout en segundos (5 min)
 
     // ── Rutas internas ────────────────────────────────────────────────────────
     private string $fontDir;
@@ -24,14 +33,14 @@ class MvCaptcha
     private string $backDir;
 
     /**
-     * @param string $urlOk    Destino tras validación exitosa.
-     * @param string $urlError Destino tras validación fallida.
-     * @param int    $length   Caracteres del captcha (por defecto 4).
+     * @param string $urlOk    Destino tras validación exitosa (ruta relativa).
+     * @param string $urlError Destino tras validación fallida (ruta relativa).
+     * @param int    $length   Caracteres del captcha (por defecto 5).
      */
     public function __construct(
         private readonly string $urlOk,
         private readonly string $urlError,
-        private readonly int    $length = 4
+        private readonly int    $length = 5
     ) {
         $this->fontDir = __DIR__ . '/fonts/';
         $this->maskDir = __DIR__ . '/img/mask/';
@@ -54,6 +63,7 @@ class MvCaptcha
     public function run(): void
     {
         $this->sessionStart();
+        $this->sendSecurityHeaders();
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $this->redirect($this->validate() ? $this->urlOk : $this->urlError);
@@ -65,12 +75,13 @@ class MvCaptcha
     /**
      * Devuelve el fragmento HTML del widget (para embeber en página propia).
      * Incluye estilos y JS inline; listo para insertar en cualquier <form>.
-     * El campo oculto del action no se genera aquí: el <form> lo provee el host.
      */
     public function widget(): string
     {
         $this->sessionStart();
-        $this->generate();
+        if ($this->lockoutSecondsRemaining() === 0) {
+            $this->generate();
+        }
         return $this->buildWidget();
     }
 
@@ -83,10 +94,41 @@ class MvCaptcha
     public function validate(): bool
     {
         $this->sessionStart();
+
+        // 1. Verificar lockout antes de cualquier otra operación
+        if ($this->lockoutSecondsRemaining() > 0) {
+            return false;
+        }
+
+        // 2. Verificar token CSRF (constant-time)
+        $csrfPost    = $_POST['_mvc_csrf'] ?? '';
+        $csrfSession = $_SESSION[self::SK_CSRF] ?? '';
+        if ($csrfPost === '' || !hash_equals($csrfSession, $csrfPost)) {
+            $this->cleanup();
+            session_regenerate_id(true);
+            return false;
+        }
+
+        // 3. Verificar TTL del captcha
+        $created = (int)($_SESSION[self::SK_CREATED] ?? 0);
+        if ($created === 0 || time() - $created > self::CAPTCHA_TTL) {
+            $this->cleanup();
+            session_regenerate_id(true);
+            return false;
+        }
+
+        // 4. Comparar captcha en tiempo constante (previene timing attacks)
         $input   = strtoupper($_POST['_mvc_captcha'] ?? '');
         $correct = $_SESSION[self::SK_STRING] ?? '';
+        $valid   = $correct !== '' && hash_equals($correct, $input);
+
+        if (!$valid) {
+            $this->recordFailedAttempt();
+        }
+
         $this->cleanup();
-        return $input === $correct && $correct !== '';
+        session_regenerate_id(true);
+        return $valid;
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -95,27 +137,61 @@ class MvCaptcha
 
     private function generate(bool $force = false): void
     {
-        // Si ya hay un captcha válido en sesión y no se fuerza regeneración,
-        // reutilizarlo. Esto evita que requests secundarias del navegador
-        // (favicon, prefetch, etc.) sobreescriban la sesión con un string
-        // distinto al que se mostró en la imagen.
         if (!$force && !empty($_SESSION[self::SK_STRING]) && !empty($_SESSION[self::SK_FILE])) {
-            return;
+            // Reusar si aún no expiró
+            $created = (int)($_SESSION[self::SK_CREATED] ?? 0);
+            if (time() - $created <= self::CAPTCHA_TTL) {
+                return;
+            }
         }
         $this->cleanup();
-        $_SESSION[self::SK_STRING] = $this->generateString();
-        $_SESSION[self::SK_FILE]   = bin2hex(random_bytes(8));
-        $_SESSION[self::SK_MASK]   = random_int(1, 3);
+        $_SESSION[self::SK_STRING] = $this->generateString([
+            'numbers' => true,
+            'special' => false,
+            'letters' => true
+        ]);
+
+        $_SESSION[self::SK_FILE]    = bin2hex(random_bytes(8));
+        $_SESSION[self::SK_MASK]    = random_int(1, 3);
+        $_SESSION[self::SK_CSRF]    = bin2hex(random_bytes(32));
+        $_SESSION[self::SK_CREATED] = time();
+        session_regenerate_id(true);
         $this->renderPng();
     }
 
-    private function generateString(): string
+    private function generateString(array $options = []): string
     {
-        // Solo mayúsculas: las fuentes decorativas del pool frecuentemente
-        // no tienen glifos minúsculos y renderizan 'a' como 'A', provocando
-        // que la comparación case-sensitive siempre falle.
-        $pool = range('A', 'Z');
-        $out  = '';
+        // Valores por defecto
+        $defaults = [
+            'letters' => true,
+            'numbers' => false,
+            'special' => false
+        ];
+        $config = array_merge($defaults, $options);
+
+        $pool = [];
+
+        // 1. Letras (manteniendo tu exclusión de I y O)
+        if ($config['letters']) {
+            $pool = array_merge($pool, array_values(array_diff(range('A', 'Z'), ['I', 'O'])));
+        }
+
+        // 2. Números
+        if ($config['numbers']) {
+            $pool = array_merge($pool, array_values(array_diff(range(2,9))));
+        }
+
+        // 3. Caracteres especiales
+        if ($config['special']) {
+            $pool = array_merge($pool, ['$', '%', '&', '#', '?']);
+        }
+
+        // Si por algún motivo el pool queda vacío, fallback a letras
+        if (empty($pool)) {
+            $pool = array_values(array_diff(range('A', 'Z'), ['I', 'O']));
+        }
+
+        $out = '';
         for ($i = 0; $i < $this->length; $i++) {
             $out .= $pool[random_int(0, count($pool) - 1)];
         }
@@ -143,7 +219,8 @@ class MvCaptcha
 
         $path = $this->tempPath();
         if (!imagepng($img, $path)) {
-            throw new RuntimeException('No se pudo guardar la imagen captcha en ' . $path);
+            // No exponer la ruta interna en el mensaje de error
+            throw new RuntimeException('Error al generar la imagen captcha.');
         }
         imagedestroy($img);
     }
@@ -151,11 +228,11 @@ class MvCaptcha
     private function listFonts(): array
     {
         $files = array_merge(
-            glob($this->fontDir . '*.ttf')         ?: [],
-            glob($this->fontDir . 'fuentes/*.ttf') ?: []
+            glob($this->fontDir . '*.ttf')         ?: []
         );
         if (empty($files)) {
-            throw new RuntimeException('No se encontraron fuentes TTF en ' . $this->fontDir);
+            // No exponer la ruta interna en el mensaje de error
+            throw new RuntimeException('No se encontraron fuentes TTF.');
         }
         return $files;
     }
@@ -172,7 +249,9 @@ class MvCaptcha
      */
     private function buildDataUri(string $half): string
     {
-        $maskNum  = $_SESSION[self::SK_MASK];
+        // Forzar maskNum dentro del rango válido (defensa en profundidad
+        // ante sesiones comprometidas o manipuladas)
+        $maskNum  = max(1, min(3, (int)($_SESSION[self::SK_MASK] ?? 1)));
         $srcPath  = $this->tempPath();
         $maskPath = $this->maskDir . 'mask' . $maskNum . $half . '.png';
 
@@ -182,7 +261,6 @@ class MvCaptcha
         $sw = imagesx($src);
         $sh = imagesy($src);
 
-        // Componer imagen con alpha basado en brillo de la máscara
         $out = imagecreatetruecolor($sw, $sh);
         imagealphablending($out, false);
         imagesavealpha($out, true);
@@ -211,8 +289,7 @@ class MvCaptcha
         imagedestroy($src);
         imagedestroy($mask);
 
-        // Recortar franja 300×75
-        $crop   = imagecreatetruecolor(300, 75);
+        $crop = imagecreatetruecolor(300, 75);
         imagealphablending($crop, false);
         imagesavealpha($crop, true);
 
@@ -234,8 +311,16 @@ class MvCaptcha
 
     private function buildPage(): string
     {
-        $this->generate(force: isset($_GET['_mvc_new']));
-        $widget = $this->buildWidget();
+        $lockoutSecs = $this->lockoutSecondsRemaining();
+
+        if ($lockoutSecs === 0) {
+            $this->generate(force: isset($_GET['_mvc_new']));
+        }
+
+        $widget     = $this->buildWidget();
+        $submitHtml = $lockoutSecs === 0
+            ? '<button type="submit" class="_mvc-submit">Verificar</button>'
+            : '';
 
         return <<<HTML
         <!DOCTYPE html>
@@ -292,6 +377,12 @@ class MvCaptcha
                     transform: translateY(-1px);
                 }
                 ._mvc-submit:active { transform: translateY(0); filter: brightness(.95); }
+                ._mvc-submit:disabled {
+                    opacity: .4;
+                    cursor: not-allowed;
+                    transform: none;
+                    filter: none;
+                }
                 ._mvc-brand {
                     margin-top: .4rem;
                     font-size: 11px;
@@ -303,7 +394,7 @@ class MvCaptcha
         <body>
             <form method="post">
                 {$widget}
-                <button type="submit" class="_mvc-submit">Verificar</button>
+                {$submitHtml}
                 <span class="_mvc-brand">mvCaptcha</span>
             </form>
         </body>
@@ -314,21 +405,33 @@ class MvCaptcha
     /** HTML puro del widget, sin <form> ni <button>. */
     private function buildWidget(): string
     {
+        $css = $this->inlineCSS();
+
+        $lockoutSecs = $this->lockoutSecondsRemaining();
+        if ($lockoutSecs > 0) {
+            return <<<HTML
+            <style>{$css}</style>
+            <div class="_mvc-widget">
+                <p class="_mvc-lockout">
+                    Demasiados intentos fallidos.<br>
+                    Intente nuevamente en <b>{$lockoutSecs}</b> segundos.
+                </p>
+            </div>
+            HTML;
+        }
+
         $imgA    = $this->buildDataUri('a');
         $imgB    = $this->buildDataUri('b');
         $back    = random_int(1, 6);
         $backImg = $this->backToDataUri($back);
         $base      = strtok($_SERVER['REQUEST_URI'] ?? './', '?');
         $reloadUrl = htmlspecialchars($base . '?_mvc_new=1', ENT_QUOTES);
+        $csrf      = htmlspecialchars($_SESSION[self::SK_CSRF] ?? '', ENT_QUOTES);
 
-        // Punto de solución aleatorio: posición normalizada del mouse (-1..1)
-        // donde las dos mitades quedan alineadas. Evita que el captcha
-        // aparezca resuelto en reposo (mouse al centro = nx=0, ny=0).
-        $solveX = random_int(-40, 40) / 100.0;   // -0.40 … 0.40
-        $solveY = random_int(-25, 25) / 100.0;   // -0.25 … 0.25
+        $solveX = random_int(-40, 40) / 100.0;
+        $solveY = random_int(-25, 25) / 100.0;
 
-        $css = $this->inlineCSS();
-        $js  = $this->inlineJS();
+        $js = $this->inlineJS();
 
         return <<<HTML
         <style>{$css}</style>
@@ -361,6 +464,7 @@ class MvCaptcha
                    autocomplete="off" autocapitalize="characters"
                    style="text-transform:uppercase"
                    required>
+            <input type="hidden" name="_mvc_csrf" value="{$csrf}">
         </div>
 
         <script>{$js}</script>
@@ -374,6 +478,48 @@ class MvCaptcha
         })();
         </script>
         HTML;
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // Seguridad — Headers HTTP
+    // ══════════════════════════════════════════════════════════════════════════
+
+    private function sendSecurityHeaders(): void
+    {
+        header('X-Content-Type-Options: nosniff');
+        header('X-Frame-Options: DENY');
+        header('Referrer-Policy: strict-origin-when-cross-origin');
+        // img-src necesita data: para los captchas embebidos como data URI
+        header("Content-Security-Policy: default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none'");
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // Seguridad — Rate limiting
+    // ══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Retorna los segundos restantes de bloqueo, o 0 si no hay bloqueo activo.
+     * Limpia automáticamente el bloqueo al expirar.
+     */
+    private function lockoutSecondsRemaining(): int
+    {
+        $until = (int)($_SESSION[self::SK_LOCKOUT] ?? 0);
+        if ($until === 0) return 0;
+        $remaining = $until - time();
+        if ($remaining <= 0) {
+            unset($_SESSION[self::SK_LOCKOUT], $_SESSION[self::SK_ATTEMPTS]);
+            return 0;
+        }
+        return $remaining;
+    }
+
+    private function recordFailedAttempt(): void
+    {
+        $attempts = (int)($_SESSION[self::SK_ATTEMPTS] ?? 0) + 1;
+        $_SESSION[self::SK_ATTEMPTS] = $attempts;
+        if ($attempts >= self::MAX_ATTEMPTS) {
+            $_SESSION[self::SK_LOCKOUT] = time() + self::LOCKOUT_DURATION;
+        }
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -408,6 +554,15 @@ class MvCaptcha
             transition: color .15s, border-color .15s;
         }
         ._mvc-hint a:hover { color: #c5c2ff; border-color: rgba(197,194,255,.5); }
+        ._mvc-lockout {
+            padding: 8px 14px;
+            background: rgba(220,60,60,.15);
+            border: 1px solid rgba(220,60,60,.3);
+            border-radius: 8px;
+            color: #f06060;
+            font-size: 12px;
+            line-height: 1.5;
+        }
         ._mvc-scene {
             position: relative;
             width: 300px;
@@ -452,6 +607,10 @@ class MvCaptcha
             outline: none;
             border-color: rgba(157,151,255,.6);
             box-shadow: 0 0 0 3px rgba(108,99,255,.25);
+        }
+        ._mvc-input:disabled {
+            opacity: .35;
+            cursor: not-allowed;
         }
         CSS;
     }
@@ -586,20 +745,34 @@ class MvCaptcha
         unset(
             $_SESSION[self::SK_STRING],
             $_SESSION[self::SK_FILE],
-            $_SESSION[self::SK_MASK]
+            $_SESSION[self::SK_MASK],
+            $_SESSION[self::SK_CSRF],
+            $_SESSION[self::SK_CREATED]
         );
+        // SK_ATTEMPTS y SK_LOCKOUT se preservan intencionalmente entre captchas
     }
 
     private function sessionStart(): void
     {
         if (session_status() === PHP_SESSION_NONE) {
-            session_start();
+            session_start([
+                'cookie_httponly' => true,
+                'cookie_samesite' => 'Strict',
+                'use_strict_mode' => true,
+                // cookie_secure solo en HTTPS para no romper desarrollo local
+                'cookie_secure'   => isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off',
+            ]);
         }
     }
 
     private function redirect(string $url): never
     {
-        header('Location: ' . $url);
+        // Prevenir open redirect: rechazar cualquier URL con esquema
+        // (http://, https://, javascript:, data:, etc.)
+        if (preg_match('/^[a-z][a-z0-9+\-.]*:/i', $url)) {
+            $url = './';
+        }
+        header('Location: ' . $url, true, 302);
         exit;
     }
 }
