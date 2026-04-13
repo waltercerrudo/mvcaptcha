@@ -22,18 +22,16 @@ Last modified: 15. January 2006
 Description:
 This class can generate CAPTCHAs, see README for more details!
 ******************************************************************/
-error_reporting(E_ALL);
-
-require('./class/captcha-2.0.1/filter.class.php');		//CHANGED BY WALTER CERRUDO 9/11/2010
-require('./class/captcha-2.0.1/error.class.php');		//CHANGED BY WALTER CERRUDO 9/11/2010
+require('./class/captcha-2.0.1/filter.class.php');
+require('./class/captcha-2.0.1/error.class.php');
 
 class captcha
 {
-	var $Length;
-	var $CaptchaString;
-	var $FileName;
-	var $fontpath;
-	var $fonts;
+	public $Length;
+	public $CaptchaString;
+	public $FileName;
+	public $fontpath;
+	public $fonts;
 	function __construct ($length = 4)			//CHANGED BY WALTER CERRUDO 9/11/2010
 	{
 				
@@ -134,7 +132,7 @@ class captcha
 		for ($i = 0; $i < strlen($this->CaptchaString); $i++)
 		{
 			$stringcolor = imagecolorallocate($image, mt_rand(75, 150), mt_rand(75, 150), mt_rand(75, 150));	//ADDED BY WALTER CERRUDO 9/11/2010
-			imagettftext($image, 35, mt_rand(-15, 15), $i * 45 + 100,mt_rand(40, 70),$stringcolor,$this->getRandFont(),$this->CaptchaString{$i}); 	//CHANGED BY WALTER CERRUDO 9/11/2010
+			imagettftext($image, 35, mt_rand(-15, 15), $i * 45 + 100, mt_rand(40, 70), $stringcolor, $this->getRandFont(), $this->CaptchaString[$i]);
 		}
 		imagecolortransparent($image,hexdec('FFFFFF'));					//ADDED BY WALTER CERRUDO 9/11/2010
 		$this->makeFileName();

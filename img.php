@@ -1,17 +1,31 @@
 <?php
-	//include '/class/image/image.class.php';	
 	session_start();
-	
-	require './class/imagemask/class.imagemask.php';	
+
+	require './class/imagemask/class.imagemask.php';
+
+	$validS = ['1', '2', '3', '4', '5'];
+	$validL = ['a', 'b'];
+
+	if (!isset($_GET['s'], $_GET['l'])
+		|| !in_array($_GET['s'], $validS, true)
+		|| !in_array($_GET['l'], $validL, true))
+	{
+		http_response_code(400);
+		die('Invalid parameters');
+	}
+
+	$s = $_GET['s'];
+	$l = $_GET['l'];
+
 	$im = new imageMask('FFFFFF');
     $im->setDebugging(true);
     $im->maskOption('centre');
-    if ($im->loadImage(sys_get_temp_dir() . DIRECTORY_SEPARATOR .$_SESSION['FILENAME'].'.png'))
+    if ($im->loadImage(sys_get_temp_dir() . DIRECTORY_SEPARATOR . $_SESSION['FILENAME'] . '.png'))
     {
-        if ($im->applyMask("./img/mask/mask".$_GET['s'].$_GET['l'].".png"))
+        if ($im->applyMask("./img/mask/mask" . $s . $l . ".png"))
         {
         	$img=imagecreatetruecolor(300, 75);
-        	if ($_GET['l']=='a')
+        	if ($l === 'a')
         	{
         		$or=mt_rand(0, 30);
         	}
@@ -25,7 +39,7 @@
 			imagecolortransparent($im->_img['final'], $bg_color);
 			$im->showImage('png',3);
 			//$im->saveImage(sys_get_temp_dir() . DIRECTORY_SEPARATOR .$_SESSION['FILENAME'].$_GET['l'].'.png');
-			if ($_GET['l']=='b')
+			if ($l === 'b')
 			{
 				//unlink(sys_get_temp_dir() . DIRECTORY_SEPARATOR .$_SESSION['FILENAME'].'.png');
 			}

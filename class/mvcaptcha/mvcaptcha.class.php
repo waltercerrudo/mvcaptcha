@@ -29,213 +29,136 @@ require './class/imagemask/class.imagemask.php';
 
 class mvcaptcha
 {
-	var $URLOK;
-	var $URLFallo;
-	var $labelname;
-	var $CaptchaSERVER;
-	var $CaptchaUSER;
-	var $Debug=false;
-	
-	
-	/**
-	* @return void
-	* @param string $parLBL nombre del input
-	* @desc Constructor MVCAPTCHA
-	*/	
-	function  __construct($parLBL,$parURLOK,$parURLFALLA) {
-		$this->labelname=$parLBL;
-		$this->URLOK=$parURLOK;
-		$this->URLFallo=$parURLFALLA;
+	public $URLOK;
+	public $URLFallo;
+	public $labelname;
+	public $CaptchaSERVER;
+	public $CaptchaUSER;
+	public $Debug = false;
+
+	function __construct($parLBL, $parURLOK, $parURLFALLA) {
+		$this->labelname = $parLBL;
+		$this->URLOK = $parURLOK;
+		$this->URLFallo = $parURLFALLA;
 	}
-	/**
-    * @return void
-    * @param string $parURLOK URL destino si el captcha ingresado es correcto
-	* @param string $parURLFALLA URL destino si el captcha ingresado es incorrecto
-    * @desc Crea y muestra el MVCAPTCHA
-    */
-	function vermvcaptcha() {		
+
+	function vermvcaptcha() {
 		$captcha = new captcha();
-		$_SESSION['FILENAME']=$captcha->FileName;		
-		$_SESSION['CAPTCHAString']=$captcha->CaptchaString;
-		$_SESSION['URLOK']=$this->URLOK;
-		$_SESSION['URLFALLO']=$this->URLFallo;
+		$_SESSION['FILENAME'] = $captcha->FileName;
+		$_SESSION['CAPTCHAString'] = $captcha->CaptchaString;
+		$_SESSION['URLOK'] = $this->URLOK;
+		$_SESSION['URLFALLO'] = $this->URLFallo;
 		$this->generarMask();
 		return $this->getHTML();
-		}
-	
-	/**
-    * @return boolean
-    * @desc Comprueba si se ingresaron datos
-    */	
+	}
+
 	function verformulario() {
 		return !isset($_POST[$this->labelname]);
-		;
-	}	
+	}
 
-	
-	function run(){
-		if ($this->verformulario())								//EVALUAR SI MUESTRO FORMULARIO 
-		{
-			echo $this->vermvcaptcha();							//MUESTRO EL MVCAPTCHA
-		}
-		else
-		{
-			$this->proceder();										//EVALUAR EL MVCAPTCHA Y CONTINUAR SEGUN CORRESPONDA
+	function run() {
+		if ($this->verformulario()) {
+			echo $this->vermvcaptcha();
+		} else {
+			$this->proceder();
 		}
 	}
 
-	
-	
-	/**
-    * @return void
-    * @param integer $mask Color sobre el cual aplicar la mascara
-    * @desc Aplica la mascara
-    */	
 	function generarMask() {
 	}
 
-		
-	/**
-    * @return void
-    * @desc Compara los captcha y redirecciona según corresponda
-    */		
 	function proceder() {
-		if ($this->getCaptchaSERVER()==$this->getCaptchaUSER())
-		{
-			header ("Location: ".$_SESSION['URLOK']);
+		$s1 = $this->getCaptchaSERVER();
+		$s2 = $this->getCaptchaUSER();
+		if ( $s1 === $s2 ) {
+			header('Location: ' . $_SESSION['URLOK']);
+		} else {
+			header('Location: ' . $_SESSION['URLFALLO']);
 		}
-		else 
-		{
-			header ("Location: ".$_SESSION['URLFALLO']);
-		}
-		;
 	}
-	
-	/**
-    * @return string
-    * @desc Devuelve el captcha ingresado por el usuario
-    */	
+
 	function getCaptchaUSER() {
-		$this->CaptchaUSER=$_POST['captchastring'];
+		$this->CaptchaUSER = $_POST['captchastring'] ?? '';
 		return $this->CaptchaUSER;
-		;
 	}
 
-	/**
-    * @return string
-    * @desc Devuelve el captcha generado por el servidor
-    */	
 	function getCaptchaSERVER() {
-		$this->CaptchaSERVER=$_SESSION['CAPTCHAString'];
+		$this->CaptchaSERVER = $_SESSION['CAPTCHAString'] ?? '';
 		return $this->CaptchaSERVER;
-		;
-	}	
-	
-	/**
-    * @return string
-    * @desc Generar salida HTML
-    */	
-	function getHTML() {
-		$yori1=mt_rand(0,9)/10;
-		$yori2=mt_rand(0,9)/10;
-		$rndImg=mt_rand(1,4);
-		$rndImg=1;
-		$html="
-		<!DOCTYPE html>
-		<html>
-		
-		<head>
-			<meta charset=\"utf-8\">
-			<link href=\"css/styles.css\" rel=\"stylesheet\" type=\"text/css\">
-			<style type=\"text/css\" media=\"screen, projection\">
-				#scene {
-					position: relative;
-					overflow: hidden;
-					width: 100%;
-					height: 75px;
-				}
-		
-				.clasecss {
-					background-color: #ff8800;
-					font-weight: bold;
-				}
-			</style>
-		</head>
-		
-		<body>
-			<table width=\"100%\" border=\"0\" cellspacing=\"0\" cellpadding=\"0\">
-				<tr>
-					<td align=\"center\" class=\"descdet\">
-						<div class=\"bordeder\">
-							<div id=\"content\">
-								<strong class=\"subder\">MVCaptcha</strong>
-								<br> Ingresar el texto mostrado en la imagen
-								<br> Mueve el Mouse para formar el texto.
-								<br> Haciendo click las im&aacute;genes dejar&aacute;n de moverse.
-								<br />
-								<a href=\"./\">
-									<img src=\"./img/recargar.png\" alt=\"colabora\" width=\"32\" height=\"32\" border=\"0\">
-								</a>
-								
-		
-								<div id=\"container\" class=\"container\">
-									<div id=\"scene1\" class=\"scene\"></div>
-									<div id=\"scene\" class=\"clear\" style=\"background: url(./img/back/back".mt_rand(1, 4).".png) center;\">
-										<div data-depth-y=\"-0.80\" data-depth-x=\"0.70\">
-											<img src=\"img.php?s=".$rndImg."&l=a\" alt=\"\" style=\"background-repeat:repeat; position:absolute;left:".mt_rand(0, 10)."px;top:0px;\">
-										</div>
-										<div data-depth-y=\"0.70\" data-depth-x=\"-0.80\">
-											<img src=\"img.php?s=".$rndImg."&l=b\" alt=\"\" style=\"background-repeat:repeat; position:absolute;left:".mt_rand(10, 20)."px;top:0px;\">
-										</div>
-									</div>
-								</div>
-		
-		
-								<form action=\"./\" method=\"POST\">
-									<p>
-										<input type=\"text\" name=\"captchastring\" size=\"30\" style=\"font-size: 18px;\">
-										<br> &#40;sEnSiblE a MayUsCulAs!&#41;</p>
-		
-									<p>
-									<p><input type=\"submit\" name=\"".$this->labelname."\" value=\"Comparar\" ></p></form>
+	}
 
-									</p>
-								</form>
-								<p>
-									<a href=\"http://jigsaw.w3.org/css-validator/check/referer\">
-										<img style=\"border:0;\" src=\"./img/cssval.gif\" alt=\"CSS Válido!\">
-									</a>
-		
-									<a href=\"http://validator.w3.org/check?uri=referer\">
-										<img src=\"./img/htmlval.gif\" style=\"border:0;\" alt=\"HTML 4.01 Strict Válido\">
-									</a>
-								</p>
-							</div>
-					</td>
-				</tr>
-			</table>
-		
-			<script src=\"./js/parallax.js\"></script>
-			<script>
-		
-		
-				var scene = document.getElementById('scene');
-				var parallax = new Parallax(scene);
-		
-				document.body.addEventListener(\"click\", function () {
-					parallax.disable();
-				});
-		
-		
-		
-			</script>
-		
-		</body>
-		
-		</html>";
-		
+	function getHTML() {
+		$rndImg = 1;
+		$rndBack = mt_rand(1, 4);
+		$leftA = mt_rand(0, 10);
+		$leftB = mt_rand(10, 20);
+		$labelSafe = htmlspecialchars($this->labelname, ENT_QUOTES);
+		$html = "<!DOCTYPE html>
+<html lang=\"es\">
+<head>
+	<meta charset=\"utf-8\">
+	<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">
+	<link href=\"css/styles.css\" rel=\"stylesheet\">
+	<style>
+		#scene {
+			position: relative;
+			overflow: hidden;
+			width: 100%;
+			height: 75px;
+		}
+		.clasecss {
+			background-color: #ff8800;
+			font-weight: bold;
+		}
+	</style>
+</head>
+<body>
+	<div style=\"text-align:center;\">
+		<div class=\"bordeder\">
+			<div id=\"content\">
+				<strong class=\"subder\">MVCaptcha</strong>
+				<br>Ingresar el texto mostrado en la imagen
+				<br>Mueve el Mouse para formar el texto.
+				<br>Haciendo click las im&aacute;genes dejar&aacute;n de moverse.
+				<br>
+				<a href=\"./\">
+					<img src=\"./img/recargar.png\" alt=\"Recargar\" width=\"32\" height=\"32\">
+				</a>
+
+				<div id=\"container\" class=\"container\">
+					<div id=\"scene1\" class=\"scene\"></div>
+					<div id=\"scene\" class=\"clear\" style=\"background: url(./img/back/back{$rndBack}.png) center;\">
+						<div data-depth-y=\"-0.80\" data-depth-x=\"0.70\">
+							<img src=\"img.php?s={$rndImg}&amp;l=a\" alt=\"\" style=\"position:absolute;left:{$leftA}px;top:0px;\">
+						</div>
+						<div data-depth-y=\"0.70\" data-depth-x=\"-0.80\">
+							<img src=\"img.php?s={$rndImg}&amp;l=b\" alt=\"\" style=\"position:absolute;left:{$leftB}px;top:0px;\">
+						</div>
+					</div>
+				</div>
+
+				<form action=\"./\" method=\"post\">
+					<p>
+						<input type=\"text\" name=\"captchastring\" maxlength=\"20\" style=\"font-size: 18px;\">
+						<br>(sEnSiblE a MayUsCulAs!)
+					</p>
+					<p><input type=\"submit\" name=\"{$labelSafe}\" value=\"Comparar\"></p>
+				</form>
+			</div>
+		</div>
+	</div>
+
+	<script src=\"./js/parallax.js\"></script>
+	<script>
+		var scene = document.getElementById('scene');
+		var parallax = new Parallax(scene);
+		document.body.addEventListener('click', function () {
+			parallax.disable();
+		});
+	</script>
+</body>
+</html>";
 		return $html;
-		;
 	}
 }
 ?>

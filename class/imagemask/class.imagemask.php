@@ -76,12 +76,12 @@ define('mdRESIZE',      9);
 
 class imageMask
 {
-    var $_colours;
-    var $_img;
-    var $_mask;
-    var $_bgc;
-    var $_showDebug;
-    var $_maskDynamic;
+    public $_colours;
+    public $_img;
+    public $_mask;
+    public $_bgc;
+    public $_showDebug;
+    public $_maskDynamic;
     
     
     /**
